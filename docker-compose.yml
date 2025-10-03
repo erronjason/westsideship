@@ -1,0 +1,87 @@
+version: "3.9"
+services:
+  # --- Content CMS ---
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: directus
+      POSTGRES_USER: directus
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  directus:
+    image: directus/directus:latest
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      DB_CLIENT: pg
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: directus
+      DB_USER: directus
+      DB_PASSWORD: ${DB_PASSWORD}
+      ADMIN_EMAIL: admin@westsideship.local
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CORS_ENABLED: true
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    ports:
+      - "8055:8055"     # http://localhost:8055
+    depends_on: [db]
+    restart: unless-stopped
+
+  # --- Upload ingress ---
+  tusd:
+    image: tusproject/tusd:latest
+    # For local testing, uncomment the next two lines:
+    # ports:
+    #   - "1080:1080"
+    command: >
+      -dir=/uploads/incoming
+      -behind-proxy
+      -hooks-http=http://printworker:8080/hooks
+      -max-size=2147483648   # 2 GB per file (tune)
+      -timeout=3h
+      # For local testing, append:
+      # -http-address=0.0.0.0:1080
+    environment:
+      - TUSD_VERBOSE=true
+    volumes:
+      - "C:\\print-uploads\\incoming:/uploads/incoming"
+    restart: unless-stopped
+
+  # --- Antivirus ---
+  clamav:
+    image: mkodockx/docker-clamav:alpine
+    restart: unless-stopped
+
+  # --- Upload post-processing worker ---
+  printworker:
+    image: python:3.12-slim
+    working_dir: /app
+    command: python worker.py
+    volumes:
+      - ./printworker/worker.py:/app/worker.py:ro
+      - "C:\\print-uploads:/uploads"
+    environment:
+      - UPLOADS_ROOT=/uploads
+      - INCOMING_DIR=/uploads/incoming
+      - CLEAN_DIR=/uploads/clean
+      - QUAR_DIR=/uploads/quarantine
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
+    depends_on: [clamav]
+    restart: unless-stopped
+
+  # --- Optional: publish via Cloudflare Tunnel (no router changes) ---
+  # Create a Named Tunnel in your Cloudflare dashboard and paste the token.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    restart: unless-stopped
+
+volumes:
+  db_data:

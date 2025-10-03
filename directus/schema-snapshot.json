@@ -1,0 +1,482 @@
+{
+  "collections": [
+    {
+      "collection": "services",
+      "meta": {
+        "icon": "view_list",
+        "note": "Business services offered"
+      },
+      "schema": {
+        "name": "services"
+      }
+    },
+    {
+      "collection": "pickup_times",
+      "meta": {
+        "icon": "schedule",
+        "note": "Daily carrier pickup cutoffs"
+      },
+      "schema": {
+        "name": "pickup_times"
+      }
+    },
+    {
+      "collection": "faqs",
+      "meta": {
+        "icon": "help",
+        "note": "Frequently asked questions"
+      },
+      "schema": {
+        "name": "faqs"
+      }
+    },
+    {
+      "collection": "deals",
+      "meta": {
+        "icon": "local_offer",
+        "note": "Promotions and coupons"
+      },
+      "schema": {
+        "name": "deals"
+      }
+    }
+  ],
+  "fields": [
+    {
+      "collection": "services",
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      }
+    },
+    {
+      "collection": "services",
+      "field": "status",
+      "type": "string",
+      "meta": {
+        "special": [
+          "status"
+        ],
+        "options": {
+          "status_mapping": {
+            "published": {
+              "name": "published",
+              "value": "published",
+              "text_color": "#ffffff",
+              "background": "#28a745"
+            },
+            "draft": {
+              "name": "draft",
+              "value": "draft",
+              "text_color": "#000000",
+              "background": "#e2e3e5"
+            },
+            "archived": {
+              "name": "archived",
+              "value": "archived",
+              "text_color": "#ffffff",
+              "background": "#6c757d"
+            }
+          }
+        }
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "sort",
+      "type": "integer",
+      "meta": {
+        "special": [
+          "sort"
+        ]
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "name",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "display": "raw",
+        "required": true
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "slug",
+      "type": "string",
+      "meta": {
+        "special": [
+          "slug"
+        ],
+        "options": {
+          "slug": "name"
+        },
+        "unique": true
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "service_type",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {
+              "text": "Shipping",
+              "value": "shipping"
+            },
+            {
+              "text": "Printing",
+              "value": "printing"
+            },
+            {
+              "text": "Mailboxes",
+              "value": "mailboxes"
+            },
+            {
+              "text": "Notary",
+              "value": "notary"
+            },
+            {
+              "text": "Shredding",
+              "value": "shredding"
+            },
+            {
+              "text": "Professional Packing",
+              "value": "packing"
+            },
+            {
+              "text": "Book Binding",
+              "value": "binding"
+            },
+            {
+              "text": "Bounce Luggage",
+              "value": "luggage"
+            }
+          ]
+        }
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "summary",
+      "type": "text",
+      "meta": {
+        "interface": "textarea"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "hero_copy",
+      "type": "text",
+      "meta": {
+        "interface": "textarea"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "cta_label",
+      "type": "string",
+      "meta": {
+        "interface": "input"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "services",
+      "field": "cta_url",
+      "type": "string",
+      "meta": {
+        "interface": "input"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      }
+    },
+    {
+      "collection": "pickup_times",
+      "field": "carrier",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {
+              "text": "UPS",
+              "value": "UPS"
+            },
+            {
+              "text": "FedEx",
+              "value": "FedEx"
+            },
+            {
+              "text": "USPS",
+              "value": "USPS"
+            },
+            {
+              "text": "DHL",
+              "value": "DHL"
+            }
+          ]
+        }
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "service",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "e.g., Ground, Express, Priority"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "weekday",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {
+              "text": "Mon",
+              "value": "Mon"
+            },
+            {
+              "text": "Tue",
+              "value": "Tue"
+            },
+            {
+              "text": "Wed",
+              "value": "Wed"
+            },
+            {
+              "text": "Thu",
+              "value": "Thu"
+            },
+            {
+              "text": "Fri",
+              "value": "Fri"
+            },
+            {
+              "text": "Sat",
+              "value": "Sat"
+            },
+            {
+              "text": "Sun",
+              "value": "Sun"
+            }
+          ]
+        }
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "cutoff_time",
+      "type": "time",
+      "meta": {
+        "interface": "input-time"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "notes",
+      "type": "string",
+      "meta": {
+        "interface": "input"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "pickup_times",
+      "field": "active",
+      "type": "boolean",
+      "meta": {
+        "interface": "boolean"
+      },
+      "schema": {
+        "default_value": true
+      }
+    },
+    {
+      "collection": "pickup_times",
+      "field": "sort",
+      "type": "integer",
+      "meta": {
+        "special": [
+          "sort"
+        ]
+      },
+      "schema": {}
+    },
+    {
+      "collection": "faqs",
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      }
+    },
+    {
+      "collection": "faqs",
+      "field": "service",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown",
+        "note": "Optional link to a Service (store the Service ID)"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "faqs",
+      "field": "question",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "required": true
+      },
+      "schema": {}
+    },
+    {
+      "collection": "faqs",
+      "field": "answer",
+      "type": "text",
+      "meta": {
+        "interface": "input-rich-text-html"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "faqs",
+      "field": "sort",
+      "type": "integer",
+      "meta": {
+        "special": [
+          "sort"
+        ]
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      }
+    },
+    {
+      "collection": "deals",
+      "field": "title",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "required": true
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "code",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Coupon code, if any"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "description",
+      "type": "text",
+      "meta": {
+        "interface": "textarea"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "start_date",
+      "type": "date",
+      "meta": {
+        "interface": "datetime"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "end_date",
+      "type": "date",
+      "meta": {
+        "interface": "datetime"
+      },
+      "schema": {}
+    },
+    {
+      "collection": "deals",
+      "field": "active",
+      "type": "boolean",
+      "meta": {
+        "interface": "boolean"
+      },
+      "schema": {
+        "default_value": true
+      }
+    },
+    {
+      "collection": "deals",
+      "field": "service",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown",
+        "note": "Optional link to a Service (store the Service ID)"
+      },
+      "schema": {}
+    }
+  ],
+  "relations": []
+}

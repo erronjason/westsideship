@@ -1,0 +1,21 @@
+---
+import { getPickupTimes } from '../lib/directus';
+const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const all = await Promise.all(days.map(async d => ({ d, data: (await getPickupTimes(d)).data })));
+---
+<html>
+  <head><meta charset="utf-8" /><title>Pickup Times</title></head>
+  <body>
+    <h1>Carrier Pickup Times</h1>
+    {all.map(({d, data}) => (
+      <section>
+        <h2>{d}</h2>
+        {(!data || data.length===0) ? <p>—</p> : (
+          <ul>
+            {data.map((p) => <li><strong>{p.carrier}</strong> – {p.service}: {p.cutoff_time} {p.notes ? `(${p.notes})` : ''}</li>)}
+          </ul>
+        )}
+      </section>
+    ))}
+  </body>
+</html>

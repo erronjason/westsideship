@@ -1,0 +1,19 @@
+---
+import { getDeals } from '../lib/directus';
+const deals = (await getDeals()).data ?? [];
+---
+<html>
+  <head><meta charset="utf-8" /><title>Deals</title></head>
+  <body>
+    <h1>Deals & Coupons</h1>
+    {deals.length === 0 ? <p>No active promotions.</p> : (
+      <ul>
+        {deals.map((d) => <li>
+          <h3>{d.title} {d.code ? `– Code: ${d.code}` : ''}</h3>
+          <p>{d.description}</p>
+          {(d.start_date || d.end_date) && <small>{d.start_date || ''} {d.end_date ? `→ ${d.end_date}` : ''}</small>}
+        </li>)}
+      </ul>
+    )}
+  </body>
+</html>

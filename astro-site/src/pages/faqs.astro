@@ -1,0 +1,18 @@
+---
+import { getFaqs } from '../lib/directus';
+const faqs = (await getFaqs()).data ?? [];
+---
+<html>
+  <head><meta charset="utf-8" /><title>FAQs</title></head>
+  <body>
+    <h1>FAQs</h1>
+    <dl>
+      {faqs.map((f) => (
+        <>
+          <dt><strong>{f.question}</strong></dt>
+          <dd><div set:html={f.answer}></div></dd>
+        </>
+      ))}
+    </dl>
+  </body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Secure Upload</title>
+  <link rel="stylesheet" href="https://releases.transloadit.com/uppy/v3.11.1/uppy.min.css" />
+  <style> body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; } 
+  label { margin-right: 12px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>Upload your files</h1>
+  <p>PDF preferred. Max 2 GB per file. Your files are scanned for viruses before staff can access them.</p>
+
+  <form id="metaform" onsubmit="return false;" style="margin:12px 0">
+    <label> Name <input id="name" type="text" placeholder="Your name" /></label>
+    <label> Email <input id="email" type="email" placeholder="you@example.com" /></label>
+  </form>
+
+  <div id="uploader"></div>
+
+  <script src="https://releases.transloadit.com/uppy/v3.11.1/uppy.min.js"></script>
+  <script>
+    const uppy = new Uppy.Core({
+      restrictions: {
+        maxFileSize: 2000 * 1024 * 1024,
+        maxNumberOfFiles: 10,
+        allowedFileTypes: ['.pdf','.png','.jpg','.jpeg','.docx']
+      },
+      autoProceed: true
+    })
+    .use(Uppy.Dashboard, { inline: true, target: '#uploader', note: 'PDF preferred' })
+    .use(Uppy.Tus, {
+      endpoint: 'http://localhost:1080/files/', // change to https://upload.example.com/files/ when tunneled
+      chunkSize: 5 * 1024 * 1024
+    });
+
+    const applyMeta = () => uppy.setMeta({
+      name: document.querySelector('#name')?.value || '',
+      email: document.querySelector('#email')?.value || ''
+    });
+    document.querySelector('#name').addEventListener('input', applyMeta);
+    document.querySelector('#email').addEventListener('input', applyMeta);
+    applyMeta();
+  </script>
+</body>
+</html>
