@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   # --- Content CMS ---
   db:
@@ -7,6 +8,11 @@ services:
       POSTGRES_DB: directus
       POSTGRES_USER: directus
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U directus -d directus"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -22,33 +28,40 @@ services:
       DB_DATABASE: directus
       DB_USER: directus
       DB_PASSWORD: ${DB_PASSWORD}
-      ADMIN_EMAIL: admin@westsideship.local
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+
+      # --- FIRST-BOOT ADMIN (hard-wired to avoid .env precedence issues) ---
+      ADMIN_EMAIL: admin@westsideship.com
+      ADMIN_PASSWORD: Changeme123!
+      # ---------------------------------------------------------------------
+
       CORS_ENABLED: true
       CORS_ORIGIN: ${CORS_ORIGIN}
     ports:
       - "8055:8055"     # http://localhost:8055
-    depends_on: [db]
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   # --- Upload ingress ---
   tusd:
     image: tusproject/tusd:latest
-    # For local testing, uncomment the next two lines:
-    # ports:
-    #   - "1080:1080"
-    command: >
-      -dir=/uploads/incoming
-      -behind-proxy
-      -hooks-http=http://printworker:8080/hooks
-      -max-size=2147483648   # 2 GB per file (tune)
-      -timeout=3h
-      # For local testing, append:
-      # -http-address=0.0.0.0:1080
+    command:
+      - -dir=/uploads/incoming
+      - -behind-proxy
+      - -hooks-http=http://printworker:8080/hooks
+      - -max-size=2147483648
+      - -timeout=3h
+      - -http-address=0.0.0.0:1080
     environment:
       - TUSD_VERBOSE=true
     volumes:
       - "C:\\print-uploads\\incoming:/uploads/incoming"
+    depends_on:
+      - printworker
+    # For local testing ONLY, expose a port:
+    # ports:
+    #   - "1080:1080"
     restart: unless-stopped
 
   # --- Antivirus ---
@@ -71,11 +84,12 @@ services:
       - QUAR_DIR=/uploads/quarantine
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
-    depends_on: [clamav]
+    depends_on:
+      - clamav
     restart: unless-stopped
 
-  # --- Optional: publish via Cloudflare Tunnel (no router changes) ---
-  # Create a Named Tunnel in your Cloudflare dashboard and paste the token.
+  # --- Optional: Cloudflare Tunnel (no router changes) ---
+  # Configure DNS routes in Cloudflare, e.g., upload.yourdomain.com -> http://tusd:1080
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel run
