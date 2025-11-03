@@ -1,0 +1,166 @@
+---
+import { telHref, formatTimeLabel } from '../lib/utils';
+const { settings, navLinks = [], openStatus } = Astro.props;
+const phone = settings?.phone ?? '';
+const phoneHref = telHref(phone);
+const businessName = settings?.business_name ?? 'Westside Shipping & More';
+const closeLabel = openStatus?.today?.close ? formatTimeLabel(openStatus.today.close) : null;
+const openNowText = openStatus?.isOpen
+  ? closeLabel
+    ? `Open now · Closes ${closeLabel}`
+    : 'Open now'
+  : openStatus?.nextOpen?.open
+    ? `Closed · Opens ${openStatus.nextOpen.label} at ${openStatus.nextOpen.open}`
+    : 'Check hours';
+---
+<header class="site-header">
+  <div class="container">
+    <div class="brand">
+      <a href="/" aria-label={`${businessName} home`} data-track-event="cta_click" data-track-label="Header Logo" data-track-location="header">
+        <span class="logo-text">{businessName}</span>
+      </a>
+      <div class={['open-pill', openStatus?.isOpen ? 'open' : 'closed'].join(' ')}>{openNowText}</div>
+    </div>
+    <div class="contact">
+      {phone && phoneHref && (
+        <a class="contact-link" href={phoneHref} data-track-event="cta_click" data-track-label="Header Phone" data-track-location="header">
+          <span aria-hidden="true">📞</span>
+          <span>{phone}</span>
+        </a>
+      )}
+      {settings?.email && (
+        <a class="contact-link" href={`mailto:${settings.email}`} data-track-event="cta_click" data-track-label="Header Email" data-track-location="header">
+          <span aria-hidden="true">✉️</span>
+          <span>{settings.email}</span>
+        </a>
+      )}
+    </div>
+    <nav class="primary-nav" aria-label="Primary">
+      <ul>
+        {navLinks.map((link) => (
+          <li>
+            <a href={link.href} data-track-event="cta_click" data-track-label={`Nav: ${link.label}`} data-track-location="header">{link.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(12px);
+  }
+
+  .site-header .container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    align-items: center;
+    gap: 1rem;
+    max-width: var(--layout-max-width);
+    margin: 0 auto;
+    padding: 1rem;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-strong);
+  }
+
+  .open-pill {
+    align-self: flex-start;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+  }
+
+  .open-pill.closed {
+    background: var(--color-muted);
+    color: var(--color-text);
+  }
+
+  .contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  .contact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    text-decoration: none;
+    font-weight: 600;
+    transition: transform 0.2s ease;
+  }
+
+  .contact-link:hover,
+  .contact-link:focus-visible {
+    transform: translateY(-1px);
+    background: var(--color-accent);
+    color: #ffffff;
+  }
+
+  .primary-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    justify-content: flex-end;
+  }
+
+  .primary-nav a {
+    text-decoration: none;
+    font-weight: 600;
+    color: var(--color-text);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+  }
+
+  .primary-nav a:hover,
+  .primary-nav a:focus-visible {
+    background: var(--color-muted);
+    color: var(--color-text-strong);
+  }
+
+  @media (max-width: 800px) {
+    .site-header .container {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+
+    .brand {
+      align-items: center;
+    }
+
+    .contact {
+      justify-content: center;
+    }
+
+    .primary-nav ul {
+      justify-content: center;
+    }
+  }
+</style>

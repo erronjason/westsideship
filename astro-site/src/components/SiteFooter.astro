@@ -1,0 +1,160 @@
+---
+import HoursTable from './HoursTable.astro';
+import { telHref, mailtoHref } from '../lib/utils';
+const { settings, navLinks = [], openStatus } = Astro.props;
+const phoneHref = telHref(settings?.phone ?? '');
+const emailHref = mailtoHref(settings?.email ?? '');
+const addressLines = Array.isArray(settings?.address_lines) ? settings.address_lines : [];
+const socialLinks = Array.isArray(settings?.social_links)
+  ? settings.social_links.filter((link) => link && link.url)
+  : [];
+---
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-column">
+      <h2 class="footer-heading">Visit Us</h2>
+      <p class="footer-brand">{settings?.business_name ?? 'Westside Shipping & More'}</p>
+      {addressLines.length > 0 && (
+        <address>
+          {addressLines.map((line) => (
+            <div>{line}</div>
+          ))}
+          <div>
+            {[settings?.city, settings?.state, settings?.zip].filter(Boolean).join(', ')}
+          </div>
+        </address>
+      )}
+      <ul class="contact-list">
+        {settings?.phone && phoneHref && (
+          <li>
+            <a href={phoneHref} data-track-event="cta_click" data-track-label="Footer Phone" data-track-location="footer">{settings.phone}</a>
+          </li>
+        )}
+        {settings?.email && emailHref && (
+          <li>
+            <a href={emailHref} data-track-event="cta_click" data-track-label="Footer Email" data-track-location="footer">{settings.email}</a>
+          </li>
+        )}
+      </ul>
+    </div>
+
+    <div class="footer-column">
+      <h2 class="footer-heading">Hours</h2>
+      <HoursTable hours={settings?.hours} todayKey={openStatus?.todayKey} />
+      {settings?.holiday_notes && <p class="holiday-note">{settings.holiday_notes}</p>}
+    </div>
+
+    <div class="footer-column">
+      <h2 class="footer-heading">Quick Links</h2>
+      <ul class="footer-nav">
+        {navLinks.map((link) => (
+          <li>
+            <a href={link.href} data-track-event="cta_click" data-track-label={`Footer: ${link.label}`} data-track-location="footer">{link.label}</a>
+          </li>
+        ))}
+      </ul>
+      {socialLinks.length > 0 && (
+        <div class="social-links" aria-label="Social links">
+          {socialLinks.map((link) => (
+            <a href={link.url} rel="noopener" target="_blank" data-track-event="cta_click" data-track-label={`Social: ${link.label ?? link.url}`} data-track-location="footer">{link.label ?? link.url}</a>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <small>© {new Date().getFullYear()} {settings?.business_name ?? 'Westside Shipping & More'}. All rights reserved.</small>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--color-footer-bg);
+    color: #ffffff;
+    padding-top: 3rem;
+    margin-top: 4rem;
+  }
+
+  .site-footer .container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2rem;
+    max-width: var(--layout-max-width);
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .footer-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .footer-heading {
+    font-size: 1.05rem;
+    margin: 0;
+    color: #ffffff;
+  }
+
+  .footer-brand {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  address {
+    font-style: normal;
+    line-height: 1.4;
+  }
+
+  .contact-list,
+  .footer-nav {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .contact-list a,
+  .footer-nav a {
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  .contact-list a:hover,
+  .contact-list a:focus-visible,
+  .footer-nav a:hover,
+  .footer-nav a:focus-visible {
+    text-decoration: underline;
+  }
+
+  .holiday-note {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .social-links {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .social-links a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .social-links a:hover,
+  .social-links a:focus-visible {
+    text-decoration: underline;
+  }
+
+  .footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 1rem 1.5rem;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+</style>

@@ -1,19 +1,226 @@
 ---
-import { getDeals } from '../lib/directus';
-const deals = (await getDeals()).data ?? [];
+import Layout from '../components/Layout.astro';
+import { getSettings, getDeals, getServices } from '../lib/directus';
+
+const settings = await getSettings();
+const servicesRes = await getServices();
+const services = servicesRes?.data ?? [];
+
+const url = new URL(Astro.request.url);
+const serviceSlug = url.searchParams.get('service') ?? '';
+const includeExpired = url.searchParams.get('include') === 'all';
+const pageParam = Number(url.searchParams.get('page') ?? '1');
+const currentPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+const limit = 8;
+
+const selectedService = services.find((service) => service.slug === serviceSlug);
+const dealsRes = await getDeals({ serviceId: selectedService?.id, includeInactive: includeExpired, limit, offset: (currentPage - 1) * limit });
+const deals = dealsRes?.data ?? [];
+const total = dealsRes?.meta?.filter_count ?? deals.length;
+const totalPages = Math.max(1, Math.ceil(total / limit));
 ---
-<html>
-  <head><meta charset="utf-8" /><title>Deals</title></head>
-  <body>
-    <h1>Deals & Coupons</h1>
-    {deals.length === 0 ? <p>No active promotions.</p> : (
-      <ul>
-        {deals.map((d) => <li>
-          <h3>{d.title} {d.code ? `– Code: ${d.code}` : ''}</h3>
-          <p>{d.description}</p>
-          {(d.start_date || d.end_date) && <small>{d.start_date || ''} {d.end_date ? `→ ${d.end_date}` : ''}</small>}
-        </li>)}
-      </ul>
+<Layout
+  settings={settings}
+  title={`Deals & Coupons | ${settings?.business_name ?? 'Westside Shipping & More'}`}
+  description="Latest shipping, notary, and mailbox promotions from Westside Shipping & More."
+>
+  <section class="hero container">
+    <h1>Deals &amp; coupons</h1>
+    <p>See the latest promotions. Present the code at drop-off or checkout so we can apply the savings.</p>
+  </section>
+
+  <section class="container filters">
+    <form method="get" class="filter-form">
+      <div class="field">
+        <label for="service">Service</label>
+        <select id="service" name="service" onchange="this.form.submit()">
+          <option value="">All services</option>
+          {services.map((service) => (
+            <option value={service.slug} selected={service.slug === serviceSlug}>{service.name}</option>
+          ))}
+        </select>
+      </div>
+      <div class="field checkbox">
+        <label>
+          <input type="checkbox" name="include" value="all" checked={includeExpired} onchange="this.form.submit()" />
+          Show expired &amp; scheduled deals
+        </label>
+      </div>
+      {currentPage > 1 && <input type="hidden" name="page" value="1" />}
+      <noscript>
+        <button type="submit" class="btn tertiary">Apply</button>
+      </noscript>
+    </form>
+  </section>
+
+  <section class="container deals-list" aria-live="polite">
+    {deals.length === 0 ? (
+      <p>No deals are available right now. Check back soon or subscribe to our in-store updates.</p>
+    ) : (
+      <div class="grid">
+        {deals.map((deal) => (
+          <article class={['card', deal.active ? 'active' : 'upcoming'].join(' ')}>
+            <header>
+              <h2>{deal.title}</h2>
+              {deal.code && <span class="badge">Code: {deal.code}</span>}
+            </header>
+            <p>{deal.description}</p>
+            <p class="dates">
+              {deal.start_date && <span>Starts {new Date(deal.start_date).toLocaleDateString()}</span>}
+              {deal.end_date && <span>Ends {new Date(deal.end_date).toLocaleDateString()}</span>}
+            </p>
+            <p class="status" role="status">{deal.active ? 'Active now' : 'Scheduled / expired'}</p>
+          </article>
+        ))}
+      </div>
     )}
-  </body>
-</html>
+  </section>
+
+  {totalPages > 1 && (
+    <nav class="container pagination" aria-label="Deal pagination">
+      <ul>
+        {Array.from({ length: totalPages }).map((_, index) => {
+          const page = index + 1;
+          const pageUrl = new URL(Astro.request.url);
+          pageUrl.searchParams.set('page', String(page));
+          if (serviceSlug) pageUrl.searchParams.set('service', serviceSlug);
+          if (includeExpired) pageUrl.searchParams.set('include', 'all');
+          return (
+            <li>
+              {page === currentPage ? (
+                <span aria-current="page">{page}</span>
+              ) : (
+                <a href={pageUrl.pathname + pageUrl.search}>{page}</a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  )}
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 1.5rem;
+    max-width: 720px;
+  }
+
+  .filters {
+    margin-top: 1.5rem;
+  }
+
+  .filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    background: #ffffff;
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .field select {
+    padding: 0.65rem 1rem;
+    border-radius: 0.65rem;
+    border: 1px solid var(--color-border);
+    font-size: 1rem;
+  }
+
+  .checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .deals-list {
+    margin-top: 2rem;
+  }
+
+  .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .card.active {
+    border: 1px solid var(--color-accent);
+  }
+
+  .badge {
+    display: inline-block;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .dates {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .status {
+    font-weight: 600;
+  }
+
+  .pagination {
+    margin: 2rem auto 3rem;
+  }
+
+  .pagination ul {
+    list-style: none;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  .pagination a,
+  .pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .pagination a {
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .pagination a:hover,
+  .pagination a:focus-visible {
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+
+  .pagination span[aria-current="page"] {
+    background: var(--color-accent);
+    color: #ffffff;
+  }
+</style>

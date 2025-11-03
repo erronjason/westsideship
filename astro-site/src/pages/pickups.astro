@@ -1,21 +1,237 @@
 ---
-import { getPickupTimes } from '../lib/directus';
-const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const all = await Promise.all(days.map(async d => ({ d, data: (await getPickupTimes(d)).data })));
+import Layout from '../components/Layout.astro';
+import { getPickupTimes, getSettings } from '../lib/directus';
+import { getOpenStatus, formatTimeLabel } from '../lib/utils';
+
+const settings = await getSettings();
+const pickupsRes = await getPickupTimes();
+const pickups = pickupsRes?.data ?? [];
+const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const todayKey = new Date().toLocaleDateString('en-US', { weekday: 'short' }).replace('.', '');
+
+const grouped = pickups.reduce((acc: Record<string, Record<string, any[]>>, item: any) => {
+  if (!acc[item.carrier]) acc[item.carrier] = {};
+  acc[item.carrier][item.weekday] = acc[item.carrier][item.weekday] || [];
+  acc[item.carrier][item.weekday].push(item);
+  return acc;
+}, {} as Record<string, Record<string, any[]>>);
+
+const carriers = Object.keys(grouped).sort();
+const openStatus = getOpenStatus(settings?.hours);
 ---
-<html>
-  <head><meta charset="utf-8" /><title>Pickup Times</title></head>
-  <body>
-    <h1>Carrier Pickup Times</h1>
-    {all.map(({d, data}) => (
-      <section>
-        <h2>{d}</h2>
-        {(!data || data.length===0) ? <p>—</p> : (
-          <ul>
-            {data.map((p) => <li><strong>{p.carrier}</strong> – {p.service}: {p.cutoff_time} {p.notes ? `(${p.notes})` : ''}</li>)}
-          </ul>
-        )}
-      </section>
-    ))}
-  </body>
-</html>
+<Layout
+  settings={settings}
+  title={`Pickup Times | ${settings?.business_name ?? 'Westside Shipping & More'}`}
+  description="View this week’s carrier pickup schedule and plan your drop-off before the cutoff."
+>
+  <section class="hero container">
+    <h1>Carrier pickup schedule</h1>
+    <p>Drop packages before the posted cutoff to catch today&apos;s pickup. We stage outgoing parcels and label everything for you.</p>
+    <div class="actions">
+      <a class="btn" href="/shipping" data-track-event="cta_click" data-track-label="Pickup Plan Shipment" data-track-location="pickups">Plan a shipment</a>
+      <span class="pill">Today: {todayKey} · {openStatus.display}</span>
+    </div>
+  </section>
+
+  <section class="container grid">
+    {carriers.length === 0 ? (
+      <p>No carrier schedules are active. Update pickup times in Directus to populate this page.</p>
+    ) : (
+      carriers.map((carrier) => (
+        <article class="card" id={carrier.toLowerCase().replace(/[^a-z0-9]+/g, '-')}> 
+          <h2>{carrier}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Cutoff</th>
+                <th scope="col">Notes</th>
+                <th scope="col" class="sr-only">Plan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weekdayOrder.map((day) => {
+                const rows = grouped[carrier][day] ?? [];
+                return rows.length === 0 ? (
+                  <tr class="empty">
+                    <th scope="row">{day}</th>
+                    <td colSpan={3}>—</td>
+                  </tr>
+                ) : (
+                  rows.map((row) => {
+                    const cutoff = formatTimeLabel(row.cutoff_time) ?? row.cutoff_time;
+                    const isToday = day === todayKey;
+                    return (
+                      <tr class={isToday ? 'is-today' : undefined}>
+                        <th scope="row">{day}</th>
+                        <td data-label="Cutoff">
+                          <span class="cutoff">{cutoff}</span>
+                          {isToday && <span class="badge">Before cutoff today</span>}
+                        </td>
+                        <td data-label="Notes">{row.notes ?? '—'}</td>
+                        <td data-label="Plan">
+                          <a
+                            class="link"
+                            href="/shipping#calculator"
+                            data-track-event="pickup_view"
+                            data-track-label={`${carrier} ${day}`}
+                            data-track-location="pickups"
+                          >Prep drop-off</a>
+                        </td>
+                      </tr>
+                    );
+                  })
+                );
+              })}
+            </tbody>
+          </table>
+        </article>
+      ))
+    )}
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 2rem;
+  }
+
+  .actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    background: var(--color-accent);
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 12px 24px rgba(15, 98, 254, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 30px rgba(15, 98, 254, 0.25);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    font-weight: 600;
+  }
+
+  .grid {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    margin-top: 2rem;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  tbody tr:last-child th,
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .empty td {
+    color: #64748b;
+    font-style: italic;
+  }
+
+  .cutoff {
+    font-weight: 600;
+  }
+
+  .badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  tr.is-today {
+    background: rgba(15, 98, 254, 0.08);
+  }
+
+  .link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .link:hover,
+  .link:focus-visible {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 768px) {
+    table,
+    thead,
+    tbody,
+    th,
+    td,
+    tr {
+      display: block;
+    }
+
+    thead {
+      display: none;
+    }
+
+    tr {
+      border: 1px solid var(--color-border);
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+    }
+
+    th,
+    td {
+      border: 0;
+      padding: 0.25rem 0;
+    }
+
+    td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      display: inline-block;
+      margin-right: 0.5rem;
+      min-width: 80px;
+    }
+  }
+</style>

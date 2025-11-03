@@ -1,34 +1,448 @@
 ---
-import { getServices, getPickupTimes } from '../lib/directus';
-const weekday = new Date().toLocaleDateString('en-US', { weekday: 'short' }).replace('.', '');
-const [servicesRes, pickupsRes] = await Promise.all([ getServices(), getPickupTimes(weekday) ]);
-const services = servicesRes.data ?? [];
-const pickups = pickupsRes.data ?? [];
----
-<html>
-  <head><meta charset="utf-8" /><title>Westside Shipping & More</title></head>
-  <body>
-    <h1>Printing, Packing, Shipping, Mailbox, Notary, Shredding</h1>
-    <section>
-      <h2>Today’s Pickup Times</h2>
-      {pickups.length === 0 ? <p>No pickups scheduled today.</p> : (
-        <ul>
-          {pickups.map((p) => <li><strong>{p.carrier}</strong> – {p.service}: {p.cutoff_time} {p.notes ? `(${p.notes})` : ''}</li>)}
-        </ul>
-      )}
-    </section>
+import Layout from '../components/Layout.astro';
+import HoursTable from '../components/HoursTable.astro';
+import { getServices, getPickupTimes, getSettings } from '../lib/directus';
+import { getOpenStatus, parseHours, formatTimeLabel } from '../lib/utils';
 
-    <section>
-      <h2>Services</h2>
-      <ul>
-        {services.map((s) => (
+const settings = await getSettings();
+const weekday = new Date().toLocaleDateString('en-US', { weekday: 'short' }).replace('.', '');
+const [servicesRes, pickupsRes] = await Promise.all([
+  getServices({ limit: 8 }),
+  getPickupTimes(weekday)
+]);
+const services = servicesRes?.data ?? [];
+const pickups = pickupsRes?.data ?? [];
+
+const heroCtas = Array.isArray(settings?.hero_cta_links) && settings.hero_cta_links.length
+  ? settings.hero_cta_links
+  : [
+      { label: 'Get a Shipping Quote', url: '/shipping' },
+      { label: 'Book a Notary', url: '/notary' },
+      { label: 'See Pickup Times', url: '/pickups' }
+    ];
+
+const uspItems = [
+  { title: 'Multi-Carrier Expertise', copy: 'Certified partner for UPS, FedEx, USPS, DHL, and freight with negotiated savings.' },
+  { title: 'Veteran-Owned & Operated', copy: 'Proudly supporting our community with disciplined service and attention to detail.' },
+  { title: '20+ Years Serving West LA', copy: 'Trusted neighborhood pros for shipping, printing, and mailbox services.' },
+  { title: 'Local Experts', copy: 'Real humans who pack, notarize, and ship like your business depends on it—because it does.' }
+];
+
+const hoursList = parseHours(settings?.hours);
+const openStatus = getOpenStatus(settings?.hours);
+const requestUrl = Astro.request ? Astro.request.url : undefined;
+const baseUrl = requestUrl ? new URL(requestUrl) : null;
+const businessUrl = baseUrl ? `${baseUrl.protocol}//${baseUrl.host}` : undefined;
+
+const openingHoursSpecification = hoursList
+  .filter((day) => !day.closed && day.open && day.close)
+  .map((day) => ({
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: `https://schema.org/${day.label.replace(' ', '')}`,
+    opens: day.open,
+    closes: day.close
+  }));
+
+const localBusinessLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: settings?.business_name ?? 'Westside Shipping & More',
+  url: businessUrl,
+  telephone: settings?.phone,
+  email: settings?.email,
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: Array.isArray(settings?.address_lines) ? settings.address_lines.join(', ') : undefined,
+    addressLocality: settings?.city,
+    addressRegion: settings?.state,
+    postalCode: settings?.zip,
+    addressCountry: 'US'
+  },
+  openingHoursSpecification,
+  sameAs: Array.isArray(settings?.social_links)
+    ? settings.social_links.filter((link) => link?.url).map((link) => link.url)
+    : undefined
+};
+---
+<Layout settings={settings} structuredData={[localBusinessLd]}>
+  <section class="hero container">
+    <div class="hero-copy">
+      <h1>Shipping, Notary, Printing &amp; More — All Under One Roof</h1>
+      <p>
+        We help Westside businesses and neighbors pack, notarize, ship, and manage mail with care. Stop by for same-day solutions
+        and expert guidance from our local team.
+      </p>
+      <div class="hero-ctas">
+        {heroCtas.map((cta) => (
+          <a class="btn" href={cta.url} data-track-event="cta_click" data-track-label={`Hero: ${cta.label}`} data-track-location="home hero">
+            {cta.label}
+          </a>
+        ))}
+      </div>
+    </div>
+    <div class="hero-badge">
+      <span class="badge-title">Open today</span>
+      <span class="badge-hours">{openStatus.display}</span>
+      {openStatus.nextOpen && !openStatus.isOpen && (
+        <span class="badge-next">Next: {openStatus.nextOpen.label} at {openStatus.nextOpen.open}</span>
+      )}
+    </div>
+  </section>
+
+  <section class="usp container" aria-label="Why customers choose us">
+    <div class="grid">
+      {uspItems.map((item) => (
+        <article>
+          <h2>{item.title}</h2>
+          <p>{item.copy}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="pickup container" aria-labelledby="pickup-heading">
+    <div class="pickup-header">
+      <div>
+        <h2 id="pickup-heading">Today&apos;s Pickup Times</h2>
+        <p>Drop off before the listed cutoff to catch today&apos;s carrier pickups.</p>
+      </div>
+      <a class="btn secondary" href="/pickups" data-track-event="pickup_view" data-track-label="Home Pickup CTA" data-track-location="home">
+        View full schedule
+      </a>
+    </div>
+    {pickups.length === 0 ? (
+      <p class="empty-state">No pickups scheduled today.</p>
+    ) : (
+      <ul class="pickup-list">
+        {pickups.map((pickup) => (
           <li>
-            <h3>{s.name}</h3>
-            <p>{s.summary}</p>
-            {s.cta_url && <a href={s.cta_url}>{s.cta_label || 'Learn more'}</a>}
+            <div class="pickup-carrier">
+              <strong>{pickup.carrier}</strong>
+              <span>{pickup.service}</span>
+            </div>
+            <div class="pickup-info">
+              <span class="cutoff">Cutoff: {formatTimeLabel(pickup.cutoff_time) ?? pickup.cutoff_time}</span>
+              {pickup.notes && <span class="notes">{pickup.notes}</span>}
+            </div>
           </li>
         ))}
       </ul>
-    </section>
-  </body>
-</html>
+    )}
+  </section>
+
+  <section class="services container" aria-labelledby="services-heading">
+    <div class="section-header">
+      <div>
+        <h2 id="services-heading">Services Tailored to Your Needs</h2>
+        <p>From urgent overnight shipments to business notary support, we have a team dedicated to getting it right the first time.</p>
+      </div>
+      <a class="link" href="/services" data-track-event="cta_click" data-track-label="Home Services CTA" data-track-location="home">Browse all services →</a>
+    </div>
+    <div class="grid services-grid">
+      {services.map((service) => (
+        <article class="service-card">
+          <h3>{service.name}</h3>
+          <p>{service.summary}</p>
+          <a class="btn tertiary" href={`/services/${service.slug}`} data-track-event="cta_click" data-track-label={`Service Card: ${service.name}`} data-track-location="home">
+            Learn more
+          </a>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="reviews container" aria-labelledby="reviews-heading">
+    <h2 id="reviews-heading">What neighbors are saying</h2>
+    <div class="reviews-placeholder">
+      <p><strong>Reviews coming soon.</strong> Ask us how to share your experience!</p>
+    </div>
+  </section>
+
+  <section class="map-hours">
+    <div class="container map-grid">
+      <div class="map">
+        <h2>Find Us</h2>
+        {settings?.map_embed_url ? (
+          <iframe
+            title="Map to Westside Shipping &amp; More"
+            src={settings.map_embed_url}
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          />
+        ) : (
+          <p>Map embed coming soon. Visit us during the hours listed to the right.</p>
+        )}
+      </div>
+      <div class="hours">
+        <h2>Lobby Hours</h2>
+        <HoursTable hours={settings?.hours} todayKey={openStatus.todayKey} />
+        {settings?.holiday_notes && <p class="holiday-note">{settings.holiday_notes}</p>}
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 2rem;
+    align-items: center;
+    padding: 4rem 1.5rem 3rem;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin-bottom: 1rem;
+  }
+
+  .hero-copy p {
+    font-size: 1.1rem;
+    max-width: 38ch;
+  }
+
+  .hero-ctas {
+    margin-top: 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    text-decoration: none;
+    font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: var(--color-accent);
+    color: #ffffff;
+    box-shadow: 0 10px 20px rgba(15, 98, 254, 0.15);
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 26px rgba(15, 98, 254, 0.2);
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--color-accent-text);
+    border: 2px solid var(--color-accent);
+    box-shadow: none;
+  }
+
+  .btn.tertiary {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    box-shadow: none;
+  }
+
+  .hero-badge {
+    align-self: stretch;
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  .badge-title {
+    font-weight: 700;
+    color: var(--color-accent-text);
+  }
+
+  .badge-hours,
+  .badge-next {
+    font-weight: 500;
+  }
+
+  .usp {
+    margin-top: 3rem;
+  }
+
+  .usp .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .usp article {
+    background: #ffffff;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  }
+
+  .usp h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1.2rem;
+  }
+
+  .pickup {
+    margin-top: 4rem;
+    background: #ffffff;
+    padding: 2.5rem 2rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .pickup-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .pickup-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+  }
+
+  .pickup-list li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    background: var(--color-background);
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    border: 1px solid var(--color-border);
+    gap: 0.75rem;
+  }
+
+  .pickup-carrier {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .pickup-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+  }
+
+  .cutoff {
+    font-weight: 600;
+    color: var(--color-text-strong);
+  }
+
+  .notes {
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .services {
+    margin-top: 4rem;
+  }
+
+  .section-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+
+  .link {
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .link:hover,
+  .link:focus-visible {
+    text-decoration: underline;
+  }
+
+  .services-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .service-card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.75rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .service-card h3 {
+    margin: 0;
+  }
+
+  .reviews {
+    margin-top: 4rem;
+    text-align: center;
+  }
+
+  .reviews-placeholder {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 2rem;
+    max-width: 580px;
+    margin: 0 auto;
+    box-shadow: inset 0 0 0 2px var(--color-muted);
+  }
+
+  .map-hours {
+    margin-top: 4rem;
+    padding: 4rem 0 2rem;
+    background: radial-gradient(circle at top left, rgba(15, 98, 254, 0.12), transparent);
+  }
+
+  .map-grid {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+
+  .map iframe {
+    width: 100%;
+    min-height: 320px;
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+  }
+
+  .holiday-note {
+    margin-top: 1rem;
+    font-weight: 500;
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding-top: 3rem;
+    }
+
+    .hero-ctas {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .pickup-list li {
+      align-items: flex-start;
+    }
+
+    .pickup-info {
+      align-items: flex-start;
+    }
+  }
+</style>
