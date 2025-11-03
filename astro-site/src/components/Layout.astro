@@ -1,0 +1,162 @@
+---
+import SiteHeader from './SiteHeader.astro';
+import SiteFooter from './SiteFooter.astro';
+import EmergencyBanner from './EmergencyBanner.astro';
+import { ensureArray, getOpenStatus } from '../lib/utils';
+const {
+  settings,
+  title,
+  description,
+  canonical,
+  structuredData = [],
+  pageClass,
+  children
+} = Astro.props;
+
+const businessName = settings?.business_name ?? 'Westside Shipping & More';
+const metaTitle = title ?? businessName;
+const defaultDescription = description ?? 'Westside Shipping & More offers expert shipping, notary, printing, mailbox, and packing services in West Los Angeles.';
+const canonicalUrl = canonical ?? (Astro.request ? new URL(Astro.request.url).toString() : undefined);
+const openStatus = getOpenStatus(settings?.hours);
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/services', label: 'Services' },
+  { href: '/shipping', label: 'Shipping' },
+  { href: '/notary', label: 'Notary' },
+  { href: '/pickups', label: 'Pickup Times' },
+  { href: '/faqs', label: 'FAQs' },
+  { href: '/deals', label: 'Deals' }
+];
+const structured = ensureArray(structuredData).filter(Boolean);
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{metaTitle}</title>
+    <meta name="description" content={defaultDescription} />
+    <link rel="canonical" href={canonicalUrl ?? '/'} />
+    <meta property="og:site_name" content={businessName} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={metaTitle} />
+    <meta property="og:description" content={defaultDescription} />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <link rel="icon" href="/favicon.ico" />
+    {structured.map((entry) => (
+      <script type="application/ld+json" is:inline>{JSON.stringify(entry)}</script>
+    ))}
+    <style is:global>
+      :root {
+        color-scheme: light;
+        --color-background: #f9fafb;
+        --color-surface: rgba(255, 255, 255, 0.9);
+        --color-footer-bg: #1a2433;
+        --color-text: #1b2533;
+        --color-text-strong: #0f172a;
+        --color-muted: #e2e8f0;
+        --color-border: #d6d9df;
+        --color-accent: #0f62fe;
+        --color-accent-subtle: rgba(15, 98, 254, 0.12);
+        --color-accent-text: #0f62fe;
+        --color-emergency-bg: #ba1a1a;
+        --color-emergency-text: #ffffff;
+        --layout-max-width: 1100px;
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: inherit;
+        background: var(--color-background);
+        color: var(--color-text);
+        line-height: 1.6;
+      }
+
+      a {
+        color: var(--color-accent-text);
+      }
+
+      a:focus-visible,
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible {
+        outline: 3px solid rgba(15, 98, 254, 0.45);
+        outline-offset: 2px;
+      }
+
+      main {
+        display: block;
+      }
+
+      .container {
+        max-width: var(--layout-max-width);
+        margin: 0 auto;
+        padding: 0 1.5rem;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+
+      .skip-link {
+        position: absolute;
+        top: -40px;
+        left: 1rem;
+        padding: 0.5rem 1rem;
+        background: var(--color-accent);
+        color: #ffffff;
+        border-radius: 0.5rem;
+        z-index: 100;
+        transition: top 0.2s ease;
+      }
+
+      .skip-link:focus {
+        top: 1rem;
+      }
+    </style>
+  </head>
+  <body class={pageClass}>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <EmergencyBanner enabled={settings?.emergency_banner_enabled} text={settings?.emergency_banner_text} />
+    <SiteHeader settings={settings} navLinks={navLinks} openStatus={openStatus} />
+    <main id="main">
+      {children}
+    </main>
+    <SiteFooter settings={settings} navLinks={navLinks} openStatus={openStatus} />
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      if (!window.__wssAnalyticsInit) {
+        window.__wssAnalyticsInit = true;
+        const dispatch = (detail) => {
+          if (!detail || !detail.event) return;
+          window.dataLayer.push({ ...detail, timestamp: Date.now() });
+        };
+        document.addEventListener('click', (event) => {
+          const target = event.target.closest('[data-track-event]');
+          if (!target) return;
+          dispatch({
+            event: target.dataset.trackEvent,
+            label: target.dataset.trackLabel,
+            location: target.dataset.trackLocation
+          });
+        });
+        document.addEventListener('wss-analytics', (event) => {
+          dispatch(event.detail);
+        });
+      }
+    </script>
+  </body>
+</html>

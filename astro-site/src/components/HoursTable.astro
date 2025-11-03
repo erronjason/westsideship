@@ -1,0 +1,52 @@
+---
+import { WEEKDAY_LABELS, parseHours, formatTimeLabel } from '../lib/utils';
+const { hours, todayKey } = Astro.props;
+const rows = parseHours(hours);
+---
+<table class="hours-table">
+  <thead>
+    <tr>
+      <th scope="col">Day</th>
+      <th scope="col">Hours</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows.map((row) => (
+      <tr class={row.key === todayKey ? 'is-today' : undefined}>
+        <th scope="row">{WEEKDAY_LABELS[row.key] ?? row.key}</th>
+        <td>
+          {row.closed ? (
+            <span>Closed</span>
+          ) : (
+            <span>{formatTimeLabel(row.open)} – {formatTimeLabel(row.close)}</span>
+          )}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+<style>
+  .hours-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .hours-table th,
+  .hours-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .hours-table tbody tr:last-child th,
+  .hours-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .hours-table tr.is-today th,
+  .hours-table tr.is-today td {
+    background: var(--color-accent-subtle);
+    font-weight: 600;
+  }
+</style>

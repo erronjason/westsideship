@@ -1,0 +1,30 @@
+---
+const { enabled, text } = Astro.props;
+const shouldRender = Boolean(enabled) && typeof text === 'string' && text.trim().length > 0;
+---
+{shouldRender && (
+  <div class="emergency-banner" role="status" aria-live="polite">
+    <div class="container">
+      <p>{text}</p>
+    </div>
+  </div>
+)}
+
+<style>
+  .emergency-banner {
+    background: var(--color-emergency-bg);
+    color: var(--color-emergency-text);
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+
+  .emergency-banner p {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .container {
+    max-width: var(--layout-max-width);
+    margin: 0 auto;
+  }
+</style>

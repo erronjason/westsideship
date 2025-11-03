@@ -1,18 +1,194 @@
 ---
-import { getFaqs } from '../lib/directus';
-const faqs = (await getFaqs()).data ?? [];
+import Layout from '../components/Layout.astro';
+import { getSettings, getFaqs, getServices } from '../lib/directus';
+
+const settings = await getSettings();
+const servicesRes = await getServices();
+const services = servicesRes?.data ?? [];
+
+const url = new URL(Astro.request.url);
+const serviceSlug = url.searchParams.get('service') ?? '';
+const pageParam = Number(url.searchParams.get('page') ?? '1');
+const currentPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+const limit = 10;
+
+const selectedService = services.find((service) => service.slug === serviceSlug);
+const faqRes = await getFaqs({ serviceId: selectedService?.id, limit, offset: (currentPage - 1) * limit });
+const faqs = faqRes?.data ?? [];
+const total = faqRes?.meta?.filter_count ?? faqs.length;
+const totalPages = Math.max(1, Math.ceil(total / limit));
+
+const faqStructured = faqs.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.slice(0, 10).map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: { '@type': 'Answer', text: faq.answer }
+      }))
+    }
+  : null;
 ---
-<html>
-  <head><meta charset="utf-8" /><title>FAQs</title></head>
-  <body>
-    <h1>FAQs</h1>
-    <dl>
-      {faqs.map((f) => (
-        <>
-          <dt><strong>{f.question}</strong></dt>
-          <dd><div set:html={f.answer}></div></dd>
-        </>
-      ))}
-    </dl>
-  </body>
-</html>
+<Layout
+  settings={settings}
+  title={`FAQs | ${settings?.business_name ?? 'Westside Shipping & More'}`}
+  description="Get answers to the most common shipping, notary, printing, and mailbox questions."
+  structuredData={faqStructured ? [faqStructured] : []}
+>
+  <section class="hero container">
+    <h1>Frequently asked questions</h1>
+    <p>Quick answers about shipping, notary, printing, mailbox rentals, and more. Need personal help? Give us a call and we&apos;ll walk through your scenario.</p>
+  </section>
+
+  <section class="container filters">
+    <form method="get" class="filter-form">
+      <label for="service-filter">Filter by service</label>
+      <select id="service-filter" name="service" onchange="this.form.submit()">
+        <option value="">All services</option>
+        {services.map((service) => (
+          <option value={service.slug} selected={service.slug === serviceSlug}>{service.name}</option>
+        ))}
+      </select>
+      {currentPage > 1 && <input type="hidden" name="page" value="1" />}
+      <noscript>
+        <button type="submit" class="btn tertiary">Apply</button>
+      </noscript>
+    </form>
+  </section>
+
+  <section class="container faq-list" aria-live="polite">
+    {faqs.length === 0 ? (
+      <p>No FAQs yet. Add questions in Directus to populate this page.</p>
+    ) : (
+      <div class="accordion">
+        {faqs.map((faq) => (
+          <details open>
+            <summary>{faq.question}</summary>
+            <div class="answer" set:html={faq.answer} />
+          </details>
+        ))}
+      </div>
+    )}
+  </section>
+
+  {totalPages > 1 && (
+    <nav class="container pagination" aria-label="FAQ pagination">
+      <ul>
+        {Array.from({ length: totalPages }).map((_, index) => {
+          const page = index + 1;
+          const pageUrl = new URL(Astro.request.url);
+          pageUrl.searchParams.set('page', String(page));
+          if (serviceSlug) pageUrl.searchParams.set('service', serviceSlug);
+          return (
+            <li>
+              {page === currentPage ? (
+                <span aria-current="page">{page}</span>
+              ) : (
+                <a href={pageUrl.pathname + pageUrl.search}>{page}</a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  )}
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 1.5rem;
+    max-width: 720px;
+  }
+
+  .filters {
+    margin-top: 1rem;
+  }
+
+  .filter-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: #ffffff;
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  }
+
+  .filter-form select {
+    padding: 0.65rem 1rem;
+    border-radius: 0.65rem;
+    border: 1px solid var(--color-border);
+    font-size: 1rem;
+  }
+
+  .faq-list {
+    margin-top: 2rem;
+  }
+
+  .accordion {
+    display: grid;
+    gap: 1rem;
+  }
+
+  details {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    outline: none;
+  }
+
+  summary::marker {
+    color: var(--color-accent-text);
+  }
+
+  .answer :global(p) {
+    margin-top: 0.75rem;
+  }
+
+  .pagination {
+    margin: 2rem auto 3rem;
+  }
+
+  .pagination ul {
+    list-style: none;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  .pagination a,
+  .pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .pagination a {
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .pagination a:hover,
+  .pagination a:focus-visible {
+    border-color: var(--color-accent);
+    color: var(--color-accent-text);
+  }
+
+  .pagination span[aria-current="page"] {
+    background: var(--color-accent);
+    color: #ffffff;
+  }
+</style>

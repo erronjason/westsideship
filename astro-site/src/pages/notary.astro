@@ -1,0 +1,307 @@
+---
+import Layout from '../components/Layout.astro';
+import { getSettings, getServiceBySlug, getFaqs, getDeals } from '../lib/directus';
+
+const settings = await getSettings();
+const service = await getServiceBySlug('notary');
+
+if (!service) {
+  Astro.response.status = 404;
+  const fallbackTitle = settings?.business_name ? `Notary | ${settings.business_name}` : 'Notary';
+  return (
+    <Layout settings={settings} title={`${fallbackTitle} - Not found`} description="The notary service is not yet published.">
+      <section class="container hero">
+        <h1>Notary service coming soon</h1>
+        <p>Please contact our team for the latest availability.</p>
+        {settings?.phone && (
+          <a class="btn" href={`tel:${settings.phone}`} data-track-event="cta_click" data-track-label="Notary Missing" data-track-location="notary">
+            Call us
+          </a>
+        )}
+      </section>
+    </Layout>
+  );
+}
+
+const [faqRes, dealsRes] = await Promise.all([
+  service ? getFaqs({ serviceId: service.id, limit: 12 }) : { data: [] },
+  service ? getDeals({ serviceId: service.id, includeInactive: false, limit: 6 }) : { data: [] }
+]);
+
+const faqs = faqRes?.data ?? [];
+const deals = dealsRes?.data ?? [];
+
+const parseList = (value: any) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const checklistItems = parseList(service?.checklist_items);
+const bookingUrl = service?.booking_embed_url ?? service?.cta_url;
+
+const serviceLd = service
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      name: service.name,
+      serviceType: 'Notary Public',
+      description: service.summary,
+      provider: {
+        '@type': 'LocalBusiness',
+        name: settings?.business_name,
+        telephone: settings?.phone
+      }
+    }
+  : null;
+
+const faqStructured = faqs.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.slice(0, 10).map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: { '@type': 'Answer', text: faq.answer }
+      }))
+    }
+  : null;
+---
+<Layout
+  settings={settings}
+  title={service ? `${service.name} Notary | ${settings?.business_name ?? 'Westside Shipping & More'}` : 'Notary Services'}
+  description={service?.seo_description ?? service?.summary ?? 'Commissioned notary services with by-appointment and walk-in options.'}
+  structuredData={[serviceLd, faqStructured].filter(Boolean)}
+>
+  <section class="hero container">
+    <div>
+      <h1>{service?.name ?? 'Notary Services'}</h1>
+      <p class="lead">{service?.hero_copy ?? 'Commissioned notary professionals available for acknowledgements, jurats, and loan signings with flexible scheduling.'}</p>
+      <div class="actions">
+        {bookingUrl && (
+          <a class="btn" href={bookingUrl} target="_blank" rel="noopener" data-track-event="notary_booking_click" data-track-label="Notary Booking" data-track-location="notary">
+            Book an appointment
+          </a>
+        )}
+        <button class="btn secondary print-btn" type="button" data-track-event="cta_click" data-track-label="Notary Print Summary" data-track-location="notary">
+          Print visit checklist
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="container layout">
+    <div class="main">
+      {service?.pricing_notes && (
+        <div class="card">
+          <h2>Pricing overview</h2>
+          <p>{service.pricing_notes}</p>
+        </div>
+      )}
+      {service?.content_html && <div class="card" set:html={service.content_html} />}
+
+      {checklistItems.length > 0 && (
+        <div class="card">
+          <h2>Bring these items</h2>
+          <ul>
+            {checklistItems.map((item) => (
+              <li>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {faqs.length > 0 && (
+        <div class="card faqs" aria-labelledby="notary-faqs">
+          <h2 id="notary-faqs">Notary FAQs</h2>
+          <details open>
+            <summary>Top questions</summary>
+            <dl>
+              {faqs.map((faq) => (
+                <div class="faq-item">
+                  <dt>{faq.question}</dt>
+                  <dd set:html={faq.answer} />
+                </div>
+              ))}
+            </dl>
+          </details>
+        </div>
+      )}
+    </div>
+    <aside class="aside">
+      <div class="card schedule">
+        <h2>Schedule your visit</h2>
+        {bookingUrl ? (
+          <iframe src={bookingUrl} title="Notary scheduling" loading="lazy" />
+        ) : (
+          <p>Call us at {settings?.phone} to schedule your notarization.</p>
+        )}
+        <p class="note">Please arrive 5 minutes early so we can verify IDs and prepare witnesses if required.</p>
+      </div>
+
+      {deals.length > 0 && (
+        <div class="card">
+          <h2>Active promotions</h2>
+          <ul class="deals">
+            {deals.map((deal) => (
+              <li>
+                <strong>{deal.title}</strong>
+                {deal.code && <span class="code">Use code {deal.code}</span>}
+                <p>{deal.description}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </aside>
+  </section>
+
+  <script is:inline>
+    if (!window.__wssNotaryPrint) {
+      window.__wssNotaryPrint = true;
+      document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('.print-btn');
+        if (trigger) {
+          document.dispatchEvent(new CustomEvent('wss-analytics', { detail: { event: 'cta_click', label: 'Notary Print Summary', location: 'notary' } }));
+          window.print();
+        }
+      });
+    }
+  </script>
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 2rem;
+  }
+
+  .lead {
+    font-size: 1.1rem;
+    max-width: 46ch;
+  }
+
+  .actions {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    background: var(--color-accent);
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 10px 24px rgba(15, 98, 254, 0.18);
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(15, 98, 254, 0.24);
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--color-accent-text);
+    border: 2px solid var(--color-accent);
+    box-shadow: none;
+  }
+
+  .layout {
+    display: grid;
+    gap: 2rem;
+    margin-top: 2rem;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .card h2 {
+    margin-top: 0;
+  }
+
+  .card ul {
+    padding-left: 1.25rem;
+  }
+
+  .card ul li + li {
+    margin-top: 0.5rem;
+  }
+
+  .faq-item {
+    margin-top: 1rem;
+  }
+
+  .faq-item dt {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .schedule iframe {
+    width: 100%;
+    min-height: 360px;
+    border: 0;
+    border-radius: 0.75rem;
+  }
+
+  .note {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .deals {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 1rem;
+  }
+
+  .deals li {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .code {
+    display: inline-block;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 900px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>

@@ -1,0 +1,117 @@
+---
+import Layout from '../components/Layout.astro';
+import HoursTable from '../components/HoursTable.astro';
+import { getSettings } from '../lib/directus';
+import { getOpenStatus } from '../lib/utils';
+
+const settings = await getSettings();
+const openStatus = getOpenStatus(settings?.hours);
+const heroLinks = Array.isArray(settings?.hero_cta_links) ? settings.hero_cta_links : [];
+const socialLinks = Array.isArray(settings?.social_links) ? settings.social_links : [];
+---
+<Layout
+  settings={settings}
+  title={`Editor Guide | ${settings?.business_name ?? 'Westside Shipping & More'}`}
+  description="Internal guide for updating site content in Directus."
+>
+  <section class="hero container">
+    <h1>Editor guide</h1>
+    <p>This page is hidden from navigation and shows how Settings power the public site.</p>
+  </section>
+
+  <section class="container grid">
+    <article class="card">
+      <h2>Emergency banner</h2>
+      <p><strong>Status:</strong> {settings?.emergency_banner_enabled ? 'Enabled' : 'Disabled'}</p>
+      {settings?.emergency_banner_text && <p>{settings.emergency_banner_text}</p>}
+      <p>Edit in Directus → <em>Settings</em> collection → <strong>Emergency banner</strong> group.</p>
+    </article>
+
+    <article class="card">
+      <h2>Business identity</h2>
+      <p><strong>Name:</strong> {settings?.business_name}</p>
+      <p><strong>Phone:</strong> {settings?.phone}</p>
+      <p><strong>Email:</strong> {settings?.email ?? '—'}</p>
+      <p>Update in <em>Settings</em> → <strong>Contact</strong> fields.</p>
+    </article>
+
+    <article class="card">
+      <h2>Hero call-to-actions</h2>
+      {heroLinks.length === 0 ? (
+        <p>No custom CTAs configured. Defaults are used on the home page.</p>
+      ) : (
+        <ul>
+          {heroLinks.map((link) => (
+            <li>{link.label} → {link.url}</li>
+          ))}
+        </ul>
+      )}
+      <p>Edit in <em>Settings</em> → <strong>Hero CTA Links</strong> (JSON array of {`{"label","url"}`}).</p>
+    </article>
+  </section>
+
+  <section class="container card hours">
+    <h2>Lobby hours preview</h2>
+    <HoursTable hours={settings?.hours} todayKey={openStatus.todayKey} />
+    {settings?.holiday_notes && <p class="note">Holiday note: {settings.holiday_notes}</p>}
+    <p>Edit in <em>Settings</em> → <strong>Hours</strong> JSON. Each day uses: <code>{'{ "open": "09:00", "close": "18:00", "closed": false }'}</code>.</p>
+  </section>
+
+  <section class="container card">
+    <h2>Social links</h2>
+    {socialLinks.length === 0 ? (
+      <p>No social links configured.</p>
+    ) : (
+      <ul>
+        {socialLinks.map((link) => (
+          <li>{link.label ?? link.url}</li>
+        ))}
+      </ul>
+    )}
+    <p>Edit in <em>Settings</em> → <strong>Social Links</strong> with an array of {`{"label","url"}`}. Links render in the site footer.</p>
+  </section>
+
+  <section class="container card">
+    <h2>Where to manage pickup times</h2>
+    <p>
+      Visit the <strong>pickup_times</strong> collection in Directus. Ensure <em>active</em> is checked to display a row. Use <em>weekday</em> values like Mon, Tue, Wed, Thu, Fri, Sat, Sun.
+    </p>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 1.5rem;
+  }
+
+  .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    margin-top: 2rem;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .card h2 {
+    margin-top: 0;
+  }
+
+  .card ul {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+
+  .hours {
+    margin-top: 2rem;
+  }
+
+  .note {
+    margin-top: 0.75rem;
+  }
+</style>

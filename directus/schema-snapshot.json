@@ -39,6 +39,27 @@
       "schema": {
         "name": "deals"
       }
+    },
+    {
+      "collection": "settings",
+      "meta": {
+        "icon": "settings",
+        "note": "Global business information powering layout and SEO",
+        "singleton": true
+      },
+      "schema": {
+        "name": "settings"
+      }
+    },
+    {
+      "collection": "calc_rules",
+      "meta": {
+        "icon": "rule",
+        "note": "Placeholder shipping calculation and recommendation rules"
+      },
+      "schema": {
+        "name": "calc_rules"
+      }
     }
   ],
   "fields": [
@@ -476,7 +497,359 @@
         "note": "Optional link to a Service (store the Service ID)"
       },
       "schema": {}
+    },
+    {
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      },
+      "collection": "settings"
+    },
+    {
+      "field": "business_name",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "required": true,
+        "note": "Displayed everywhere across the site and in structured data."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "address_lines",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of address lines shown in footer and map module. Example: [\"123 Main St\", \"Suite 100\"]."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "city",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "City for address and structured data."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "state",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Two-letter state abbreviation."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "zip",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Postal/ZIP code."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "phone",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Primary business phone number displayed in header and footer."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "email",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "General contact email (optional)."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "map_embed_url",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Google Maps embed URL for the location iframe."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "hours",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "JSON hours keyed by weekday. Example: {\"monday\": {\"open\": \"09:00\", \"close\": \"18:00\", \"closed\": false}}."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "holiday_notes",
+      "type": "text",
+      "meta": {
+        "interface": "textarea",
+        "note": "Optional text shown near hours to call out holiday closures."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "emergency_banner_enabled",
+      "type": "boolean",
+      "meta": {
+        "interface": "boolean",
+        "note": "Toggle to display the emergency banner sitewide."
+      },
+      "schema": {
+        "default_value": false
+      },
+      "collection": "settings"
+    },
+    {
+      "field": "emergency_banner_text",
+      "type": "text",
+      "meta": {
+        "interface": "textarea",
+        "note": "Copy shown in the emergency banner when enabled."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "social_links",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of {\"label\":\"Facebook\",\"url\":\"https://...\"} objects rendered in the footer."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "hero_cta_links",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of hero CTA button objects. Example: [{\"label\": \"Get a Shipping Quote\", \"url\": \"/shipping\"}]."
+      },
+      "schema": {},
+      "collection": "settings"
+    },
+    {
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "special": [
+          "uuid"
+        ]
+      },
+      "schema": {
+        "is_primary_key": true
+      },
+      "collection": "calc_rules"
+    },
+    {
+      "field": "label",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "required": true,
+        "note": "Name of this rule set (internal only)."
+      },
+      "schema": {},
+      "collection": "calc_rules"
+    },
+    {
+      "field": "slug",
+      "type": "string",
+      "meta": {
+        "special": [
+          "slug"
+        ],
+        "options": {
+          "slug": "label"
+        },
+        "unique": true,
+        "note": "Unique identifier for referencing this rule set."
+      },
+      "schema": {},
+      "collection": "calc_rules"
+    },
+    {
+      "field": "description",
+      "type": "text",
+      "meta": {
+        "interface": "textarea",
+        "note": "Explain how to maintain these placeholder rules."
+      },
+      "schema": {},
+      "collection": "calc_rules"
+    },
+    {
+      "field": "is_default",
+      "type": "boolean",
+      "meta": {
+        "interface": "boolean",
+        "note": "When enabled, this rule set powers the public calculator."
+      },
+      "schema": {
+        "default_value": false
+      },
+      "collection": "calc_rules"
+    },
+    {
+      "field": "rules",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "required": true,
+        "note": "JSON payload describing calculator weights and service types."
+      },
+      "schema": {},
+      "collection": "calc_rules"
+    },
+    {
+      "field": "seo_title",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Optional page title override for SEO."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "seo_description",
+      "type": "text",
+      "meta": {
+        "interface": "textarea",
+        "note": "Meta description for the service detail page."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "content_html",
+      "type": "text",
+      "meta": {
+        "interface": "input-rich-text-html",
+        "note": "Primary rich text body for the service page."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "checklist_items",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of checklist item strings (used for services like Notary)."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "pricing_notes",
+      "type": "text",
+      "meta": {
+        "interface": "textarea",
+        "note": "Optional pricing details shown prominently on the service page."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "prohibited_items",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of prohibited item descriptions (used for Shipping page)."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "field": "tracking_links",
+      "type": "json",
+      "meta": {
+        "interface": "json",
+        "note": "Array of {\"label\":\"Track UPS\",\"url\":\"https://...\"} link objects."
+      },
+      "schema": {},
+      "collection": "services"
+    },
+    {
+      "collection": "services",
+      "field": "booking_embed_url",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "note": "Optional booking iframe/embed URL (used on Notary page)."
+      },
+      "schema": {}
     }
   ],
-  "relations": []
+  "relations": [
+    {
+      "collection": "faqs",
+      "field": "service",
+      "related_collection": "services",
+      "meta": {
+        "many_collection": "faqs",
+        "many_field": "service",
+        "one_collection": "services",
+        "one_field": null,
+        "one_primary": "id",
+        "junction_field": null,
+        "one_allowed_collections": null,
+        "one_collection_field": null,
+        "one_deselect_action": "nullify",
+        "sort_field": null
+      },
+      "schema": {
+        "on_delete": "SET NULL"
+      }
+    },
+    {
+      "collection": "deals",
+      "field": "service",
+      "related_collection": "services",
+      "meta": {
+        "many_collection": "deals",
+        "many_field": "service",
+        "one_collection": "services",
+        "one_field": null,
+        "one_primary": "id",
+        "junction_field": null,
+        "one_allowed_collections": null,
+        "one_collection_field": null,
+        "one_deselect_action": "nullify",
+        "sort_field": null
+      },
+      "schema": {
+        "on_delete": "SET NULL"
+      }
+    }
+  ]
 }

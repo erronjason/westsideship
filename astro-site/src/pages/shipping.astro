@@ -1,0 +1,797 @@
+---
+import Layout from '../components/Layout.astro';
+import HoursTable from '../components/HoursTable.astro';
+import { getSettings, getServiceBySlug, getFaqs, getDeals, getDefaultCalcRules } from '../lib/directus';
+import { getOpenStatus } from '../lib/utils';
+
+const settings = await getSettings();
+const service = await getServiceBySlug('shipping');
+
+const [faqRes, dealsRes, calcRulesRes] = await Promise.all([
+  service ? getFaqs({ serviceId: service.id, limit: 15 }) : { data: [] },
+  service ? getDeals({ serviceId: service.id, includeInactive: false, limit: 6 }) : { data: [] },
+  getDefaultCalcRules()
+]);
+
+const faqs = faqRes?.data ?? [];
+const deals = dealsRes?.data ?? [];
+
+const defaultRules = {
+  dimensional_divisor: 139,
+  service_types: [
+    {
+      id: 'express_overnight',
+      label: 'Express Overnight',
+      base_score: 95,
+      speed: 'overnight',
+      domestic_only: true,
+      max_weight: 70,
+      description: 'Our fastest door-to-door option for urgent documents and parcels.'
+    },
+    {
+      id: 'two_day_air',
+      label: '2-Day Air',
+      base_score: 82,
+      speed: 'two_day',
+      domestic_only: true,
+      max_weight: 100,
+      description: 'Balanced speed and value for business-critical shipments.'
+    },
+    {
+      id: 'ground_saver',
+      label: 'Ground Saver',
+      base_score: 68,
+      speed: 'ground',
+      domestic_only: true,
+      max_weight: 150,
+      description: 'Best for budget-friendly deliveries within the lower 48 states.'
+    },
+    {
+      id: 'intl_priority',
+      label: 'International Priority',
+      base_score: 90,
+      speed: 'express',
+      international_only: true,
+      max_weight: 70,
+      description: 'Handled end-to-end with customs paperwork support.'
+    }
+  ],
+  speed_weights: {
+    overnight: 35,
+    two_day: 18,
+    ground: 5,
+    express: 30,
+    economy: 0
+  },
+  distance_weights: {
+    domestic: 8,
+    international: 24
+  },
+  option_weights: {
+    fragile: 12,
+    insurance: 8,
+    signature: 5
+  },
+  budget_weights: {
+    speed: 15,
+    balance: 6,
+    budget: -8
+  }
+};
+
+let rulePayload = calcRulesRes?.data ? calcRulesRes.data.rules ?? calcRulesRes.data?.rules : calcRulesRes?.rules;
+let calculatorRules = null;
+if (typeof rulePayload === 'string') {
+  try {
+    calculatorRules = JSON.parse(rulePayload);
+  } catch (error) {
+    calculatorRules = null;
+  }
+} else if (rulePayload) {
+  calculatorRules = rulePayload;
+}
+if (!calculatorRules) {
+  calculatorRules = defaultRules;
+}
+
+const openStatus = getOpenStatus(settings?.hours);
+
+const parseList = (value: any) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const prohibitedItems = parseList(service?.prohibited_items);
+const trackingLinks = parseList(service?.tracking_links).filter((link: any) => link?.url);
+
+const serviceLd = service
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'Service',
+      name: service.name,
+      description: service.summary,
+      serviceType: 'Shipping',
+      provider: {
+        '@type': 'LocalBusiness',
+        name: settings?.business_name,
+        telephone: settings?.phone
+      }
+    }
+  : null;
+
+const faqStructured = faqs.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.slice(0, 10).map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: { '@type': 'Answer', text: faq.answer }
+      }))
+    }
+  : null;
+---
+<Layout
+  settings={settings}
+  title={service ? `${service.name} | ${settings?.business_name ?? 'Westside Shipping & More'}` : 'Shipping Services'}
+  description={service?.seo_description ?? service?.summary ?? 'Full-service packing and shipping across major carriers with expert guidance.'}
+  structuredData={[serviceLd, faqStructured].filter(Boolean)}
+>
+  <section class="hero container">
+    <div>
+      <h1>{service?.name ?? 'Shipping Services'}</h1>
+      <p class="lead">{service?.hero_copy ?? 'Compare carriers, pack with confidence, and send with negotiated rates—all with one stop on the Westside.'}</p>
+      <div class="actions">
+        <a class="btn" href="#calculator" data-track-event="calc_open" data-track-label="Jump to Calculator" data-track-location="shipping">
+          Open shipping calculator
+        </a>
+        <a class="btn secondary" href="/pickups" data-track-event="pickup_view" data-track-label="Shipping Pickup CTA" data-track-location="shipping">
+          Check today&apos;s pickups
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container layout">
+    <div class="main">
+      <article class="card" id="calculator">
+        <header>
+          <h2>Shipping calculator</h2>
+          <p>Estimate billable weight and see the best-fit service based on your shipment profile. Enter real dimensions for accurate dimensional weight.</p>
+        </header>
+        <form id="shipping-calculator" novalidate>
+          <div class="error-summary" role="alert" aria-live="polite"></div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="originZip">Origin ZIP</label>
+              <input id="originZip" name="originZip" type="text" inputmode="numeric" pattern="\\d{5}" value={settings?.zip ?? ''} required />
+              <small>Default is our shop ZIP; change if picking up elsewhere.</small>
+            </div>
+            <div class="field">
+              <label for="destinationCountry">Destination country</label>
+              <select id="destinationCountry" name="destinationCountry" required>
+                <option value="">Select...</option>
+                <option value="US" selected>United States</option>
+                <option value="CA">Canada</option>
+                <option value="MX">Mexico</option>
+                <option value="INTL">International (other)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="destinationZip">Destination ZIP / Postal code</label>
+              <input id="destinationZip" name="destinationZip" type="text" inputmode="text" placeholder="Required for US shipments" />
+            </div>
+          </div>
+          <fieldset class="dimensions">
+            <legend>Package dimensions (inches)</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="length">Length</label>
+                <input id="length" name="length" type="number" min="1" step="0.1" required />
+              </div>
+              <div class="field">
+                <label for="width">Width</label>
+                <input id="width" name="width" type="number" min="1" step="0.1" required />
+              </div>
+              <div class="field">
+                <label for="height">Height</label>
+                <input id="height" name="height" type="number" min="1" step="0.1" required />
+              </div>
+              <div class="field">
+                <label for="weight">Actual weight (lbs)</label>
+                <input id="weight" name="weight" type="number" min="0.1" step="0.1" required />
+              </div>
+            </div>
+          </fieldset>
+          <div class="form-grid">
+            <div class="field">
+              <label for="speedPreference">Speed preference</label>
+              <select id="speedPreference" name="speedPreference" required>
+                <option value="">Select...</option>
+                <option value="overnight">Overnight / Next flight</option>
+                <option value="two_day">2-day</option>
+                <option value="ground">Ground (1-5 days)</option>
+                <option value="economy">Best value / Flexible</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="priority">What matters most?</label>
+              <select id="priority" name="priority" required>
+                <option value="">Select...</option>
+                <option value="speed">Fastest arrival</option>
+                <option value="balance">Balanced</option>
+                <option value="budget">Lowest cost</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="serviceType">Preferred service</label>
+              <select id="serviceType" name="serviceType">
+                <option value="">Let us recommend</option>
+                {(calculatorRules.service_types || []).map((serviceType) => (
+                  <option value={serviceType.id}>{serviceType.label}</option>
+                ))}
+              </select>
+              <small>This will pre-fill if you use the wizard below.</small>
+            </div>
+          </div>
+          <fieldset>
+            <legend>Extra options</legend>
+            <div class="options">
+              <label>
+                <input type="checkbox" name="options" value="fragile" /> Fragile / glass / delicate
+              </label>
+              <label>
+                <input type="checkbox" name="options" value="insurance" /> Add insurance coverage
+              </label>
+              <label>
+                <input type="checkbox" name="options" value="signature" /> Signature required on delivery
+              </label>
+            </div>
+          </fieldset>
+          <button type="submit" class="btn">Run estimate</button>
+        </form>
+        <div id="calc-results" class="results" aria-live="polite"></div>
+      </article>
+
+      <article class="card wizard" id="wizard">
+        <h2>Help me choose</h2>
+        <p>Unsure where to start? Answer three quick questions and we&apos;ll suggest services.</p>
+        <form id="wizard-form">
+          <div class="field">
+            <label for="wizard-speed">How fast do you need it to arrive?</label>
+            <select id="wizard-speed" required>
+              <option value="">Select...</option>
+              <option value="overnight">Within 1 day</option>
+              <option value="two_day">Within 2 days</option>
+              <option value="ground">3-5 days</option>
+              <option value="economy">Flexible / lowest cost</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="wizard-priority">What is most important?</label>
+            <select id="wizard-priority" required>
+              <option value="">Select...</option>
+              <option value="speed">Speed</option>
+              <option value="balance">Balance of speed & cost</option>
+              <option value="budget">Budget</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="wizard-destination">Destination</label>
+            <select id="wizard-destination" required>
+              <option value="">Select...</option>
+              <option value="domestic">United States</option>
+              <option value="international">International</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="wizard-fragile">Is it fragile?</label>
+            <select id="wizard-fragile" required>
+              <option value="">Select...</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          <button type="submit" class="btn secondary">Get recommendations</button>
+        </form>
+        <div id="wizard-results" class="results" aria-live="polite"></div>
+      </article>
+
+      {prohibitedItems.length > 0 && (
+        <article class="card">
+          <h2>Items we cannot ship</h2>
+          <ul>
+            {prohibitedItems.map((item) => (
+              <li>{item}</li>
+            ))}
+          </ul>
+        </article>
+      )}
+
+      {trackingLinks.length > 0 && (
+        <article class="card">
+          <h2>Track a package</h2>
+          <ul class="links">
+            {trackingLinks.map((link) => (
+              <li>
+                <a href={link.url} target="_blank" rel="noopener" data-track-event="cta_click" data-track-label={`Tracking: ${link.label ?? link.url}`} data-track-location="shipping">
+                  {link.label ?? link.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </article>
+      )}
+
+      {faqs.length > 0 && (
+        <article class="card">
+          <h2>Shipping FAQs</h2>
+          <dl>
+            {faqs.map((faq) => (
+              <div class="faq-item">
+                <dt>{faq.question}</dt>
+                <dd set:html={faq.answer} />
+              </div>
+            ))}
+          </dl>
+        </article>
+      )}
+    </div>
+
+    <aside class="aside">
+      <div class="card hours">
+        <h2>Drop-off hours</h2>
+        <HoursTable hours={settings?.hours} todayKey={openStatus.todayKey} />
+        {settings?.holiday_notes && <p class="note">{settings.holiday_notes}</p>}
+      </div>
+      {deals.length > 0 && (
+        <div class="card">
+          <h2>Featured deals</h2>
+          <ul class="deals">
+            {deals.map((deal) => (
+              <li>
+                <strong>{deal.title}</strong>
+                {deal.code && <span class="code">Use code {deal.code}</span>}
+                <p>{deal.description}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </aside>
+  </section>
+
+  <article class="container card assumptions">
+    <h2>How this calculator works</h2>
+    <ul>
+      <li>Dimensional weight uses a divisor of {calculatorRules.dimensional_divisor ?? defaultRules.dimensional_divisor}. Billable weight is the higher of dimensional or actual weight.</li>
+      <li>Scores are placeholders based on editable Directus rules—final rates are confirmed in-store.</li>
+      <li>International estimates assume customs paperwork is prepared and duties are paid by the receiver.</li>
+    </ul>
+  </article>
+
+  <script type="application/json" id="calc-rules">{JSON.stringify(calculatorRules)}</script>
+  <script is:inline>
+    (() => {
+      const form = document.getElementById('shipping-calculator');
+      const resultsEl = document.getElementById('calc-results');
+      const wizardForm = document.getElementById('wizard-form');
+      const wizardResults = document.getElementById('wizard-results');
+      const rulesEl = document.getElementById('calc-rules');
+      if (!form || !resultsEl || !rulesEl) return;
+
+      let hasOpened = false;
+      const rules = (() => {
+        try {
+          return JSON.parse(rulesEl.textContent || '{}');
+        } catch (error) {
+          return {};
+        }
+      })();
+
+      const dispatch = (detail) => {
+        document.dispatchEvent(new CustomEvent('wss-analytics', { detail }));
+      };
+
+      form.addEventListener('focusin', () => {
+        if (!hasOpened) {
+          hasOpened = true;
+          dispatch({ event: 'calc_open', label: 'Shipping calculator', location: 'shipping' });
+        }
+      });
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const errors = [];
+        const originZip = (formData.get('originZip') || '').toString().trim();
+        const destinationCountry = (formData.get('destinationCountry') || '').toString();
+        const destinationZip = (formData.get('destinationZip') || '').toString().trim();
+        const length = Number(formData.get('length'));
+        const width = Number(formData.get('width'));
+        const height = Number(formData.get('height'));
+        const weight = Number(formData.get('weight'));
+        const speedPreference = (formData.get('speedPreference') || '').toString();
+        const priority = (formData.get('priority') || '').toString();
+        const preferredService = (formData.get('serviceType') || '').toString();
+        const selectedOptions = formData.getAll('options').map((value) => value.toString());
+
+        if (!originZip || !/^[0-9]{5}$/.test(originZip)) {
+          errors.push('Enter a valid 5-digit origin ZIP code.');
+        }
+        if (!destinationCountry) {
+          errors.push('Select a destination country.');
+        }
+        if (destinationCountry === 'US' && (!destinationZip || !/^[0-9]{5}$/.test(destinationZip))) {
+          errors.push('Enter a valid destination ZIP for US shipments.');
+        }
+        if (!(length > 0) || !(width > 0) || !(height > 0) || !(weight > 0)) {
+          errors.push('Enter positive numbers for dimensions and weight.');
+        }
+        if (!speedPreference) {
+          errors.push('Choose a speed preference.');
+        }
+        if (!priority) {
+          errors.push('Select your priority.');
+        }
+
+        const errorSummary = form.querySelector('.error-summary');
+        if (errorSummary) {
+          errorSummary.innerHTML = errors.length
+            ? `<div><strong>Please fix the following:</strong><ul>${errors.map((e) => `<li>${e}</li>`).join('')}</ul></div>`
+            : '';
+        }
+        if (errors.length) {
+          errorSummary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+
+        const divisor = Number(rules.dimensional_divisor) || 139;
+        const dimensionalWeight = (length * width * height) / divisor;
+        const billableWeight = Math.max(dimensionalWeight, weight);
+
+        const normalizedOptions = new Set(selectedOptions);
+        const results = (rules.service_types || []).map((serviceType) => {
+          let score = Number(serviceType.base_score) || 0;
+          const serviceSpeed = serviceType.speed;
+          if (rules.speed_weights && rules.speed_weights[speedPreference]) {
+            score += Number(rules.speed_weights[speedPreference]) || 0;
+          }
+          if (rules.speed_weights && rules.speed_weights[serviceSpeed]) {
+            score += Number(rules.speed_weights[serviceSpeed]) * 0.2 || 0;
+          }
+          const isInternational = destinationCountry !== 'US';
+          if (serviceType.domestic_only && isInternational) score -= 999;
+          if (serviceType.international_only && !isInternational) score -= 999;
+          if (serviceType.max_weight && billableWeight > Number(serviceType.max_weight)) score -= 50;
+          if (rules.distance_weights) {
+            score += Number(rules.distance_weights[isInternational ? 'international' : 'domestic']) || 0;
+          }
+          if (rules.budget_weights && priority && rules.budget_weights[priority]) {
+            score += Number(rules.budget_weights[priority]);
+          }
+          if (rules.option_weights) {
+            for (const option of normalizedOptions) {
+              if (rules.option_weights[option]) {
+                score += Number(rules.option_weights[option]);
+              }
+            }
+          }
+          if (preferredService && preferredService === serviceType.id) {
+            score += 15;
+          }
+          return { ...serviceType, score };
+        }).filter((item) => item.score > 0);
+
+        results.sort((a, b) => b.score - a.score);
+        const topResults = results.slice(0, 3);
+
+        resultsEl.innerHTML = topResults.length
+          ? `<h3>Recommended services</h3>
+            <p>Estimated billable weight: <strong>${billableWeight.toFixed(1)} lbs</strong> (dimensional weight ${dimensionalWeight.toFixed(1)} lbs)</p>
+            <ol>${topResults.map((result) => `<li><strong>${result.label}</strong><p>${result.description || ''}</p></li>`).join('')}</ol>`
+          : '<p>No matching services. Please contact our team for a custom quote.</p>';
+
+        dispatch({ event: 'calc_submit', label: `Calculator submit (${topResults.map((r) => r.id).join(',') || 'none'})`, location: 'shipping' });
+      });
+
+      if (wizardForm && wizardResults) {
+        let wizardStarted = false;
+        wizardForm.addEventListener('focusin', () => {
+          if (!wizardStarted) {
+            wizardStarted = true;
+            dispatch({ event: 'wizard_start', label: 'Shipping wizard', location: 'shipping' });
+          }
+        });
+        wizardForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const speedEl = document.getElementById('wizard-speed');
+          const priorityEl = document.getElementById('wizard-priority');
+          const destinationEl = document.getElementById('wizard-destination');
+          const fragileEl = document.getElementById('wizard-fragile');
+          const speed = speedEl instanceof HTMLSelectElement ? speedEl.value : '';
+          const priority = priorityEl instanceof HTMLSelectElement ? priorityEl.value : '';
+          const destination = destinationEl instanceof HTMLSelectElement ? destinationEl.value : '';
+          const fragile = fragileEl instanceof HTMLSelectElement ? fragileEl.value : '';
+          if (!speed || !priority || !destination || !fragile) {
+            wizardResults.innerHTML = '<p>Please answer each question.</p>';
+            return;
+          }
+
+          const isInternational = destination === 'international';
+          const matches = (rules.service_types || []).map((serviceType) => {
+            let score = Number(serviceType.base_score) || 0;
+            if (rules.speed_weights && rules.speed_weights[speed]) {
+              score += Number(rules.speed_weights[speed]);
+            }
+            if (rules.budget_weights && rules.budget_weights[priority]) {
+              score += Number(rules.budget_weights[priority]);
+            }
+            if (fragile === 'yes' && rules.option_weights && rules.option_weights.fragile) {
+              score += Number(rules.option_weights.fragile);
+            }
+            if (serviceType.domestic_only && isInternational) score -= 999;
+            if (serviceType.international_only && !isInternational) score -= 999;
+            return { ...serviceType, score };
+          }).filter((result) => result.score > 0);
+
+          matches.sort((a, b) => b.score - a.score);
+          const topMatches = matches.slice(0, 3);
+
+          wizardResults.innerHTML = topMatches.length
+            ? `<ol>${topMatches.map((match) => `<li><strong>${match.label}</strong><p>${match.description || ''}</p><button type="button" class="btn tertiary" data-service="${match.id}">Use this service</button></li>`).join('')}</ol>`
+            : '<p>No clear winner—chat with us for a custom plan.</p>';
+
+          wizardResults.querySelectorAll('button[data-service]').forEach((button) => {
+            button.addEventListener('click', () => {
+              const serviceId = button.getAttribute('data-service');
+              const serviceSelect = document.getElementById('serviceType');
+              if (serviceSelect instanceof HTMLSelectElement && serviceId) {
+                serviceSelect.value = serviceId;
+              }
+              form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              dispatch({ event: 'wizard_finish', label: `Wizard select ${serviceId}`, location: 'shipping' });
+            });
+          });
+        });
+      }
+    })();
+  </script>
+</Layout>
+
+<style>
+  .hero {
+    padding: 3rem 1.5rem 2rem;
+  }
+
+  .lead {
+    font-size: 1.1rem;
+    max-width: 52ch;
+  }
+
+  .actions {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    background: var(--color-accent);
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 10px 24px rgba(15, 98, 254, 0.18);
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(15, 98, 254, 0.24);
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--color-accent-text);
+    border: 2px solid var(--color-accent);
+    box-shadow: none;
+  }
+
+  .btn.tertiary {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    box-shadow: none;
+  }
+
+  .layout {
+    display: grid;
+    gap: 2rem;
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+    margin-top: 2rem;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.75rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .card header {
+    margin-bottom: 1rem;
+  }
+
+  form#shipping-calculator {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .form-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .field label {
+    font-weight: 600;
+  }
+
+  input, select {
+    padding: 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid var(--color-border);
+    font-size: 1rem;
+  }
+
+  fieldset {
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  legend {
+    padding: 0 0.35rem;
+    font-weight: 600;
+  }
+
+  .options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .options label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .error-summary {
+    background: rgba(186, 26, 26, 0.1);
+    border: 1px solid rgba(186, 26, 26, 0.4);
+    color: #5f1212;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .error-summary ul {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+  }
+
+  .results {
+    margin-top: 1.25rem;
+    background: var(--color-background);
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+  }
+
+  .results ol {
+    padding-left: 1.25rem;
+    margin: 0.75rem 0 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .wizard .results button {
+    margin-top: 0.5rem;
+  }
+
+  .links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .links a {
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .faq-item {
+    margin-top: 1rem;
+  }
+
+  .faq-item dt {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+  }
+
+  .aside .card {
+    margin-bottom: 1.5rem;
+  }
+
+  .hours .note {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .deals {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 1rem;
+  }
+
+  .deals li {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .code {
+    display: inline-block;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+
+  .assumptions {
+    margin-top: 3rem;
+  }
+
+  .assumptions ul {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+
+  @media (max-width: 960px) {
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>

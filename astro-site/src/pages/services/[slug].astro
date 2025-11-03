@@ -1,0 +1,428 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getSettings, getServiceBySlug, getServices, getFaqs, getDeals } from '../../lib/directus';
+
+const { slug } = Astro.params;
+const settingsPromise = getSettings();
+const service = await getServiceBySlug(slug ?? '');
+
+if (!service) {
+  const settings = await settingsPromise;
+  Astro.response.status = 404;
+  const title = settings?.business_name ? `Not found | ${settings.business_name}` : 'Service not found';
+  return (
+    <Layout settings={settings} title={title} description="The requested service could not be found.">
+      <section class="container not-found">
+        <h1>Service unavailable</h1>
+        <p>We couldn&apos;t find that service. Please explore our other offerings below.</p>
+        <a class="btn" href="/services">Browse services</a>
+      </section>
+    </Layout>
+  );
+}
+
+const [settings, faqRes, dealsRes, otherServicesRes] = await Promise.all([
+  settingsPromise,
+  getFaqs({ serviceId: service.id, limit: 20 }),
+  getDeals({ serviceId: service.id, includeInactive: true, limit: 20 }),
+  getServices({ limit: 6 })
+]);
+
+const faqs = faqRes?.data ?? [];
+const deals = (dealsRes?.data ?? []).sort((a, b) => {
+  if (a.active === b.active) {
+    const aStart = a.start_date ? new Date(a.start_date).getTime() : 0;
+    const bStart = b.start_date ? new Date(b.start_date).getTime() : 0;
+    return bStart - aStart;
+  }
+  return a.active ? -1 : 1;
+});
+const otherServices = (otherServicesRes?.data ?? []).filter((item) => item.id !== service.id).slice(0, 3);
+
+const parseList = (value: any) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+  return [];
+};
+
+const checklistItems = parseList(service.checklist_items);
+const prohibitedItems = parseList(service.prohibited_items);
+const trackingLinks = parseList(service.tracking_links).filter((link: any) => link?.url);
+
+const pageTitle = service.seo_title ?? `${service.name} | ${settings?.business_name ?? 'Westside Shipping & More'}`;
+const pageDescription = service.seo_description ?? service.summary ?? `Learn more about ${service.name} from Westside Shipping & More.`;
+
+const serviceLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  name: service.name,
+  serviceType: service.service_type,
+  description: service.summary ?? service.seo_description,
+  provider: {
+    '@type': 'LocalBusiness',
+    name: settings?.business_name,
+    telephone: settings?.phone,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: Array.isArray(settings?.address_lines) ? settings.address_lines.join(', ') : undefined,
+      addressLocality: settings?.city,
+      addressRegion: settings?.state,
+      postalCode: settings?.zip,
+      addressCountry: 'US'
+    }
+  }
+};
+
+const faqStructured = faqs.length
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.slice(0, 10).map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: { '@type': 'Answer', text: faq.answer }
+      }))
+    }
+  : null;
+---
+<Layout settings={settings} title={pageTitle} description={pageDescription} structuredData={[serviceLd, faqStructured].filter(Boolean)}>
+  <section class="hero container">
+    <div>
+      <p class="eyebrow">{service.service_type?.toUpperCase()}</p>
+      <h1>{service.name}</h1>
+      <p class="lead">{service.summary}</p>
+      <div class="actions">
+        {service.cta_url && (
+          <a class="btn" href={service.cta_url} data-track-event="cta_click" data-track-label={`Service CTA: ${service.name}`} data-track-location="service">
+            {service.cta_label ?? 'Book now'}
+          </a>
+        )}
+        <a class="btn secondary" href="/pickups" data-track-event="cta_click" data-track-label={`Service Pickup CTA: ${service.name}`} data-track-location="service">
+          See pickup times
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container content">
+    {service.hero_copy && <p class="highlight">{service.hero_copy}</p>}
+    {service.content_html && <div class="rich" set:html={service.content_html} />}
+    {service.pricing_notes && (
+      <div class="callout">
+        <h2>Pricing at a glance</h2>
+        <p>{service.pricing_notes}</p>
+      </div>
+    )}
+    {checklistItems.length > 0 && (
+      <div class="callout">
+        <h2>What to bring</h2>
+        <ul>
+          {checklistItems.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+    {prohibitedItems.length > 0 && (
+      <div class="callout">
+        <h2>Prohibited or restricted items</h2>
+        <ul>
+          {prohibitedItems.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+    {trackingLinks.length > 0 && (
+      <div class="callout">
+        <h2>Track your shipment</h2>
+        <ul class="links">
+          {trackingLinks.map((link) => (
+            <li>
+              <a href={link.url} target="_blank" rel="noopener" data-track-event="cta_click" data-track-label={`Tracking: ${link.label ?? link.url}`} data-track-location="service">
+                {link.label ?? link.url}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </section>
+
+  {deals.length > 0 && (
+    <section class="container deals" aria-labelledby="deals-heading">
+      <h2 id="deals-heading">Current deals</h2>
+      <div class="grid">
+        {deals.map((deal) => (
+          <article class={['deal-card', deal.active ? 'is-active' : ''].join(' ')}>
+            <header>
+              <h3>{deal.title}</h3>
+              {deal.code && <span class="badge">Code: {deal.code}</span>}
+            </header>
+            <p>{deal.description}</p>
+            <p class="dates">
+              {deal.start_date && <span>Starts {new Date(deal.start_date).toLocaleDateString()}</span>}
+              {deal.end_date && <span>Ends {new Date(deal.end_date).toLocaleDateString()}</span>}
+            </p>
+            <p class="status" role="status">{deal.active ? 'Active now' : 'Scheduled'}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+
+  {faqs.length > 0 && (
+    <section class="container faqs" aria-labelledby="faq-heading">
+      <h2 id="faq-heading">Frequently asked questions</h2>
+      <dl>
+        {faqs.map((faq) => (
+          <div class="faq-item">
+            <dt>{faq.question}</dt>
+            <dd set:html={faq.answer} />
+          </div>
+        ))}
+      </dl>
+    </section>
+  )}
+
+  {otherServices.length > 0 && (
+    <section class="container related" aria-labelledby="related-heading">
+      <h2 id="related-heading">You might also need</h2>
+      <div class="grid">
+        {otherServices.map((item) => (
+          <article>
+            <h3>{item.name}</h3>
+            <p>{item.summary}</p>
+            <a class="btn tertiary" href={`/services/${item.slug}`} data-track-event="cta_click" data-track-label={`Related: ${item.name}`} data-track-location="service">
+              Learn more
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+</Layout>
+
+<style>
+  .hero {
+    padding: 3.5rem 1.5rem 2rem;
+  }
+
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--color-accent-text);
+  }
+
+  .lead {
+    font-size: 1.15rem;
+    max-width: 48ch;
+  }
+
+  .actions {
+    margin-top: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    text-decoration: none;
+    font-weight: 600;
+    background: var(--color-accent);
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(15, 98, 254, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn:hover,
+  .btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 30px rgba(15, 98, 254, 0.25);
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--color-accent-text);
+    border: 2px solid var(--color-accent);
+    box-shadow: none;
+  }
+
+  .btn.tertiary {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    box-shadow: none;
+  }
+
+  .content {
+    display: grid;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  .highlight {
+    font-size: 1.05rem;
+    font-weight: 600;
+    background: #ffffff;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .rich :global(p) {
+    margin-top: 0;
+  }
+
+  .rich :global(a) {
+    color: var(--color-accent-text);
+    font-weight: 600;
+  }
+
+  .callout {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: inset 0 0 0 1px var(--color-muted);
+  }
+
+  .callout h2 {
+    margin-top: 0;
+  }
+
+  .callout ul {
+    padding-left: 1.25rem;
+    margin: 0;
+  }
+
+  .callout ul li + li {
+    margin-top: 0.5rem;
+  }
+
+  .callout .links {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .callout .links a {
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .deals {
+    margin-top: 3rem;
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .deals .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .deal-card {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    border: 1px solid var(--color-border);
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .deal-card.is-active {
+    border-color: var(--color-accent);
+  }
+
+  .deal-card .badge {
+    display: inline-block;
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .deal-card .dates {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    color: #475569;
+  }
+
+  .deal-card .status {
+    font-weight: 600;
+  }
+
+  .faqs {
+    margin-top: 3rem;
+  }
+
+  .faqs dl {
+    margin: 0;
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .faq-item {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .faq-item dt {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .related {
+    margin-top: 3rem;
+  }
+
+  .related .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .related article {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: grid;
+    gap: 0.75rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  .not-found {
+    padding: 4rem 1.5rem;
+    text-align: center;
+  }
+
+  @media (max-width: 768px) {
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>
