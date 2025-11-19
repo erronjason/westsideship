@@ -41,6 +41,16 @@ npm run dev
 ```
 Open http://localhost:4321
 
+## Static site via GitHub Pages
+- The Astro site now builds to `docs/site` with relative asset paths so it can be hosted straight from this repo.
+- To rebuild the static files:
+  ```
+  cd astro-site
+  PUBLIC_DIRECTUS_URL="https://your-directus.example.com" npm run build
+  ```
+  If `PUBLIC_DIRECTUS_URL` is omitted the build still succeeds with empty placeholder data so that previews work everywhere.
+- Commit the generated `docs/site` folder (and the `docs/index.html` redirect) and enable GitHub Pages for the **/docs** folder in the repository settings.
+
 ## Upload testing (local)
 For local testing, uncomment the `ports` and `-http-address=...:1080` lines in `docker-compose.yml` under the `tusd` service, then open `website/intake.html` in your browser. Uploaded files:
 - are written to `C:\print-uploads\incoming`
