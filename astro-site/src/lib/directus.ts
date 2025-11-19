@@ -1,7 +1,17 @@
 const BASE = import.meta.env.PUBLIC_DIRECTUS_URL;
 const TOKEN = import.meta.env.DIRECTUS_STATIC_TOKEN;
+let warnedAboutMissingBase = false;
+
+function emptyResponse() {
+  if (!warnedAboutMissingBase) {
+    console.warn('PUBLIC_DIRECTUS_URL is not set. Returning empty data for build-time rendering.');
+    warnedAboutMissingBase = true;
+  }
+  return { data: [] };
+}
 
 export async function di(path, params = {}) {
+  if (!BASE) return emptyResponse();
   const url = new URL(path, BASE);
   if (params && Object.keys(params).length) {
     url.search = new URLSearchParams(params).toString();
